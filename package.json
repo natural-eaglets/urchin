@@ -1,0 +1,65 @@
+{
+  "name": "urchin",
+  "version": "0.2.0",
+  "description": "Quantum-encrypted file vault — encrypt with CIFER (ML-KEM-768 + AES-256-GCM), store on Filecoin/IPFS or locally",
+  "type": "module",
+  "license": "MIT",
+  "author": "Mickael Canu <mickael@capsule-corp.io>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/capsule-corp-ternoa/urchin"
+  },
+  "homepage": "https://github.com/capsule-corp-ternoa/urchin#readme",
+  "bugs": {
+    "url": "https://github.com/capsule-corp-ternoa/urchin/issues"
+  },
+  "keywords": [
+    "encryption",
+    "quantum-resistant",
+    "post-quantum",
+    "ML-KEM-768",
+    "CIFER",
+    "filecoin",
+    "ipfs",
+    "storacha",
+    "vault",
+    "cli",
+    "web3",
+    "decentralized-storage"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "bin": {
+    "urchin": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "urchin.png",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/cli.js",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@noble/ed25519": "^2.1.0",
+    "boxen": "^8.0.1",
+    "chalk": "^5.3.0",
+    "cifer-sdk": "^0.4.1",
+    "cli-table3": "^0.6.5",
+    "commander": "^13.0.0",
+    "figures": "^6.1.0",
+    "gradient-string": "^3.0.0",
+    "inquirer": "^12.0.0",
+    "inquirer-file-selector": "^1.0.1",
+    "ora": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
