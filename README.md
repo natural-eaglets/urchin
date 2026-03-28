@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/urchin-vault"><img src="https://img.shields.io/npm/v/urchin-vault?color=00FF88&label=npm" alt="npm version" /></a>
-  <a href="https://github.com/capsule-corp-ternoa/urchin/blob/main/LICENSE"><img src="https://img.shields.io/github/license/capsule-corp-ternoa/urchin?color=00D4FF" alt="license" /></a>
+  <a href="https://github.com/natural-eaglets/urchin/blob/main/LICENSE"><img src="https://img.shields.io/github/license/natural-eaglets/urchin?color=00D4FF" alt="license" /></a>
   <img src="https://img.shields.io/badge/node-%3E%3D20-green" alt="node" />
   <img src="https://img.shields.io/badge/encryption-ML--KEM--768-A855F7" alt="encryption" />
 </p>
@@ -43,7 +43,7 @@ Your files are encrypted locally before they ever leave your machine, then store
 npm install -g urchin-vault
 
 # Or clone and link
-git clone https://github.com/capsule-corp-ternoa/urchin.git
+git clone https://github.com/natural-eaglets/urchin.git
 cd urchin
 npm install
 npm run build
@@ -211,7 +211,7 @@ src/
 ## Development
 
 ```bash
-git clone https://github.com/capsule-corp-ternoa/urchin.git
+git clone https://github.com/natural-eaglets/urchin.git
 cd urchin
 npm install
 npm run dev        # Watch mode

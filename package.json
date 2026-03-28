@@ -7,11 +7,11 @@
   "author": "Mickael Canu <mickael@capsule-corp.io>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/capsule-corp-ternoa/urchin"
+    "url": "https://github.com/natural-eaglets/urchin"
   },
-  "homepage": "https://github.com/capsule-corp-ternoa/urchin#readme",
+  "homepage": "https://github.com/natural-eaglets/urchin#readme",
   "bugs": {
-    "url": "https://github.com/capsule-corp-ternoa/urchin/issues"
+    "url": "https://github.com/natural-eaglets/urchin/issues"
   },
   "keywords": [
     "encryption",
