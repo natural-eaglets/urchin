@@ -58,7 +58,6 @@ npm link
 npm install -g @storacha/cli
 storacha login you@email.com
 storacha space create my-vault
-storacha space provision --customer you@email.com
 ```
 
 ## Quick Start
