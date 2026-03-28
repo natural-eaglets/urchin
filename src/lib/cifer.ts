@@ -61,56 +61,11 @@ function makeEd25519Signer(privateKey: Uint8Array, publicKey: Uint8Array) {
   };
 }
 
-export async function loginWeb2(email: string, password: string) {
+export async function loginWeb2(email: string, password: string, preGeneratedKeys?: { privateKey: string; publicKey: string }) {
   const sdk = await getSdk();
   const bbUrl = getBlackboxUrl();
 
-  const privateKey = ed.utils.randomPrivateKey();
-  const publicKey = await ed.getPublicKeyAsync(privateKey);
-  const ed25519Signer = makeEd25519Signer(privateKey, publicKey);
-
-  // Look up principal
-  const principal = await (web2.principal as any).getByEmail(email, bbUrl);
-
-  // Register Ed25519 key and check node propagation status
-  const keyResult = await web2.auth.registerKey({
-    principalId: principal.principalId,
-    password,
-    ed25519Signer,
-    blackboxUrl: bbUrl,
-  });
-
-  if (process.env.URCHIN_DEBUG) {
-    console.error('[debug] registerKey result:', JSON.stringify(keyResult, null, 2));
-  }
-
-  // Wait for node registration if not yet complete/partial
-  if (keyResult.nodeRegistrationStatus !== 'complete' && keyResult.nodeRegistrationStatus !== 'partial') {
-    const maxRetries = 10;
-    for (let i = 0; i < maxRetries; i++) {
-      await new Promise(r => setTimeout(r, 3000));
-      const status = await web2.auth.nodeRegistrationStatus(principal.principalId, bbUrl);
-      if (process.env.URCHIN_DEBUG) {
-        console.error(`[debug] node status attempt ${i + 1}/${maxRetries}:`, JSON.stringify(status, null, 2));
-      }
-      if (status.nodeRegistrationStatus === 'complete' || status.nodeRegistrationStatus === 'partial') {
-        break;
-      }
-      // Retry propagation on failed/pending
-      try {
-        await web2.auth.retryNodeRegistration({ principalId: principal.principalId, blackboxUrl: bbUrl });
-      } catch (retryErr: any) {
-        if (process.env.URCHIN_DEBUG) {
-          console.error('[debug] retryNodeRegistration error:', retryErr.message);
-        }
-      }
-      if (i === maxRetries - 1) {
-        throw new Error('Key registration failed: could not propagate to enough nodes after 10 attempts. Try again later.');
-      }
-    }
-  }
-
-  // Create a session — use debug fetch to capture actual server response
+  // Debug fetch wrapper to capture server responses
   const debugFetch: typeof fetch = async (input, init) => {
     const response = await fetch(input, init);
     if (process.env.URCHIN_DEBUG) {
@@ -124,30 +79,158 @@ export async function loginWeb2(email: string, password: string) {
     }
     return response;
   };
+  const fetchOpt = process.env.URCHIN_DEBUG ? { fetch: debugFetch } : {};
 
-  try {
-    currentSession = await web2.session.createManagedSession({
-      principalId: principal.principalId,
-      ed25519Signer,
-      blackboxUrl: bbUrl,
-      fetch: debugFetch,
-    });
-  } catch (sessionErr: any) {
+  // Look up principal
+  const principal = await (web2.principal as any).getByEmail(email, bbUrl);
+
+  if (process.env.URCHIN_DEBUG) {
+    console.error('[debug] principal:', JSON.stringify(principal, null, 2));
+  }
+
+  // Check if we have stored keys for this account (returning user, same machine)
+  const store = loadStore();
+  const existingSession = store.session;
+  let privateKey: Uint8Array;
+  let publicKey: Uint8Array;
+  let needsKeyRegistration = true;
+
+  if (preGeneratedKeys) {
+    // Keys from a previous rotation permit — reuse them
+    privateKey = new Uint8Array(Buffer.from(preGeneratedKeys.privateKey, 'hex'));
+    publicKey = new Uint8Array(Buffer.from(preGeneratedKeys.publicKey, 'hex'));
+    needsKeyRegistration = false;
+
     if (process.env.URCHIN_DEBUG) {
-      console.error('[debug] createManagedSession error:', sessionErr);
+      console.error('[debug] reusing pre-generated keys from rotation permit');
     }
-    // Re-check node status to give a better error message
+  } else if (
+    existingSession?.mode === 'web2' &&
+    existingSession.email === email &&
+    existingSession.ed25519PrivateKey &&
+    existingSession.ed25519PublicKey
+  ) {
+    // Returning user on same machine — reuse stored keys
+    privateKey = new Uint8Array(Buffer.from(existingSession.ed25519PrivateKey, 'hex'));
+    publicKey = new Uint8Array(Buffer.from(existingSession.ed25519PublicKey, 'hex'));
+    needsKeyRegistration = false;
+
+    if (process.env.URCHIN_DEBUG) {
+      console.error('[debug] reusing stored Ed25519 keys for', email);
+    }
+  } else {
+    // New user or different machine — generate fresh keys
+    privateKey = ed.utils.randomPrivateKey();
+    publicKey = await ed.getPublicKeyAsync(privateKey);
+
+    if (process.env.URCHIN_DEBUG) {
+      console.error('[debug] generated new Ed25519 keys for', email);
+    }
+  }
+
+  const ed25519Signer = makeEd25519Signer(privateKey, publicKey);
+
+  // Register Ed25519 key if needed (new keys only)
+  if (needsKeyRegistration) {
     try {
-      const finalStatus = await web2.auth.nodeRegistrationStatus(principal.principalId, bbUrl);
-      throw new Error(
-        `Session creation failed: ${sessionErr.message}\n` +
-        `  Node status: ${finalStatus.nodeRegistrationStatus}\n` +
-        `  Success nodes: ${finalStatus.successNodes?.length ?? 0}\n` +
-        `  Failed nodes: ${finalStatus.failedNodes?.length ?? 0}\n` +
-        `  Try again in a few seconds, or run: urchin login`
-      );
-    } catch (statusErr: any) {
-      if (statusErr.message.startsWith('Session creation failed')) throw statusErr;
+      const keyResult = await web2.auth.registerKey({
+        principalId: principal.principalId,
+        password,
+        ed25519Signer,
+        blackboxUrl: bbUrl,
+        ...fetchOpt,
+      });
+
+      if (process.env.URCHIN_DEBUG) {
+        console.error('[debug] registerKey result:', JSON.stringify(keyResult, null, 2));
+      }
+
+      // Wait for node registration if not yet complete/partial
+      if (keyResult.nodeRegistrationStatus !== 'complete' && keyResult.nodeRegistrationStatus !== 'partial') {
+        const maxRetries = 10;
+        for (let i = 0; i < maxRetries; i++) {
+          await new Promise(r => setTimeout(r, 3000));
+          const status = await web2.auth.nodeRegistrationStatus(principal.principalId, bbUrl);
+          if (process.env.URCHIN_DEBUG) {
+            console.error(`[debug] node status attempt ${i + 1}/${maxRetries}:`, JSON.stringify(status, null, 2));
+          }
+          if (status.nodeRegistrationStatus === 'complete' || status.nodeRegistrationStatus === 'partial') {
+            break;
+          }
+          try {
+            await web2.auth.retryNodeRegistration({ principalId: principal.principalId, blackboxUrl: bbUrl });
+          } catch (retryErr: any) {
+            if (process.env.URCHIN_DEBUG) {
+              console.error('[debug] retryNodeRegistration error:', retryErr.message);
+            }
+          }
+          if (i === maxRetries - 1) {
+            throw new Error('Key registration failed: could not propagate to enough nodes. Try again later.');
+          }
+        }
+      }
+    } catch (regErr: any) {
+      // 409 = keys already registered on nodes from a previous session.
+      // Rotate to the new key using email+password (no session needed)
+      const msg = regErr.message?.toLowerCase() || '';
+      if (msg.includes('already exists') || msg.includes('node registration failed') || msg.includes('409')) {
+        if (process.env.URCHIN_DEBUG) {
+          console.error('[debug] keys already registered, rotating to new key via permit...');
+        }
+
+        const publicKeyHex = Buffer.from(publicKey).toString('hex');
+        // Request key rotation — this sends a confirmation email
+        const permitResult = await web2.permit.requestPermit({
+          action: 'rotate',
+          email,
+          password,
+          payload: { newPublicKey: publicKeyHex },
+          blackboxUrl: bbUrl,
+          ...fetchOpt,
+        } as any);
+
+        if (process.env.URCHIN_DEBUG) {
+          console.error('[debug] rotation permit granted:', JSON.stringify(permitResult, null, 2));
+        }
+
+        // The rotation requires email confirmation — throw a clear message
+        // so the auth command can handle the interactive flow
+        const err: any = new Error('KEY_ROTATION_PENDING');
+        err.permitId = permitResult.permitId;
+        err.principalId = principal.principalId;
+        err.email = email;
+        err.privateKey = Buffer.from(privateKey).toString('hex');
+        err.publicKey = Buffer.from(publicKey).toString('hex');
+        throw err;
+      } else {
+        throw regErr;
+      }
+    }
+  }
+
+  // Create a session (with retries for key rotation propagation)
+  const maxSessionRetries = 5;
+  for (let attempt = 0; attempt < maxSessionRetries; attempt++) {
+    try {
+      currentSession = await web2.session.createManagedSession({
+        principalId: principal.principalId,
+        ed25519Signer,
+        blackboxUrl: bbUrl,
+        ...fetchOpt,
+      });
+      break; // success
+    } catch (sessionErr: any) {
+      if (process.env.URCHIN_DEBUG) {
+        console.error(`[debug] createManagedSession attempt ${attempt + 1}/${maxSessionRetries} error:`, sessionErr.message);
+      }
+      // Retry on any session failure (rotation may still be propagating)
+      if (attempt < maxSessionRetries - 1) {
+        if (process.env.URCHIN_DEBUG) {
+          console.error(`[debug] retrying in 5s (key rotation may still be propagating)...`);
+        }
+        await new Promise(r => setTimeout(r, 5000));
+        continue;
+      }
       throw new Error(`Session creation failed: ${sessionErr.message}. Try: urchin login`);
     }
   }

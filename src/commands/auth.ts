@@ -2,8 +2,8 @@ import { Command } from 'commander';
 import ora from 'ora';
 import inquirer from 'inquirer';
 import { loadStore, saveStore } from '../lib/store.js';
-import { registerWeb2, verifyWeb2, loginWeb2 } from '../lib/cifer.js';
-import { header, kv, success, error as uiError, warn, ACCENT, DIM, BOLD } from '../lib/ui.js';
+import { registerWeb2, verifyWeb2, loginWeb2, restoreWeb2Session } from '../lib/cifer.js';
+import { header, kv, success, error as uiError, warn, info, ACCENT, DIM, BOLD } from '../lib/ui.js';
 
 export function registerAuthCommands(program: Command) {
   // ─── Register ───────────────────────────────────────────
@@ -69,23 +69,68 @@ export function registerAuthCommands(program: Command) {
           { type: 'password', name: 'password', message: 'Password:', mask: '●' },
         ]);
 
-        const spinner = ora({ text: 'Logging in...', indent: 2 }).start();
-        const session = await loginWeb2(email, password);
-        spinner.succeed('Logged in');
+        let spinner = ora({ text: 'Logging in...', indent: 2 }).start();
 
-        const store = loadStore();
-        store.session = {
-          mode: 'web2',
-          email,
-          principalId: session.principalId,
-          ed25519PrivateKey: session.ed25519PrivateKey,
-          ed25519PublicKey: session.ed25519PublicKey,
-        };
-        saveStore(store);
+        try {
+          const session = await loginWeb2(email, password);
+          spinner.succeed('Logged in');
 
-        console.log('');
-        success(`Logged in as ${ACCENT(email)}`);
-        console.log('');
+          const store = loadStore();
+          store.session = {
+            mode: 'web2',
+            email,
+            principalId: session.principalId,
+            ed25519PrivateKey: session.ed25519PrivateKey,
+            ed25519PublicKey: session.ed25519PublicKey,
+          };
+          saveStore(store);
+
+          console.log('');
+          success(`Logged in as ${ACCENT(email)}`);
+          console.log('');
+        } catch (rotationErr: any) {
+          if (rotationErr.message !== 'KEY_ROTATION_PENDING') throw rotationErr;
+
+          // Key rotation requires email confirmation
+          spinner.stop();
+          console.log('');
+          warn('Your keys need to be rotated (previous session data was lost).');
+          info(`A confirmation email has been sent to ${ACCENT(email)}.`);
+          info('Please confirm the key rotation in your email, then press Enter.');
+          console.log('');
+
+          // Capture the keys that were submitted in the rotation permit
+          const rotationKeys = {
+            privateKey: rotationErr.privateKey as string,
+            publicKey: rotationErr.publicKey as string,
+          };
+
+          await inquirer.prompt([{
+            type: 'input',
+            name: 'confirmed',
+            message: 'Press Enter after confirming the email...',
+          }]);
+
+          // Retry login with the SAME keys from the rotation permit
+          spinner = ora({ text: 'Completing login...', indent: 2 }).start();
+
+          const session = await loginWeb2(email, password, rotationKeys);
+          spinner.succeed('Logged in');
+
+          const store = loadStore();
+          store.session = {
+            mode: 'web2',
+            email,
+            principalId: session.principalId,
+            ed25519PrivateKey: session.ed25519PrivateKey,
+            ed25519PublicKey: session.ed25519PublicKey,
+          };
+          saveStore(store);
+
+          console.log('');
+          success(`Logged in as ${ACCENT(email)}`);
+          console.log('');
+        }
       } catch (err: any) {
         uiError(err.message);
         process.exit(1);
