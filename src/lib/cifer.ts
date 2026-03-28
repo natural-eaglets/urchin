@@ -72,13 +72,31 @@ export async function loginWeb2(email: string, password: string) {
   // Look up principal
   const principal = await (web2.principal as any).getByEmail(email, bbUrl);
 
-  // Register Ed25519 key
-  await web2.auth.registerKey({
+  // Register Ed25519 key and check node propagation status
+  const keyResult = await web2.auth.registerKey({
     principalId: principal.principalId,
     password,
     ed25519Signer,
     blackboxUrl: bbUrl,
   });
+
+  // Wait for node registration if not yet complete/partial
+  if (keyResult.nodeRegistrationStatus === 'pending' || keyResult.nodeRegistrationStatus === 'failed') {
+    const maxRetries = 5;
+    for (let i = 0; i < maxRetries; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const status = await web2.auth.nodeRegistrationStatus(principal.principalId, bbUrl);
+      if (status.nodeRegistrationStatus === 'complete' || status.nodeRegistrationStatus === 'partial') {
+        break;
+      }
+      if (status.nodeRegistrationStatus === 'failed' || status.nodeRegistrationStatus === 'pending') {
+        await web2.auth.retryNodeRegistration({ principalId: principal.principalId, blackboxUrl: bbUrl });
+      }
+      if (i === maxRetries - 1) {
+        throw new Error('Key registration failed: could not propagate to enough nodes. Try again later.');
+      }
+    }
+  }
 
   // Create a session (stateless approach)
   currentSession = await web2.session.createManagedSession({
