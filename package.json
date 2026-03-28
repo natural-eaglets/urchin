@@ -1,6 +1,6 @@
 {
   "name": "urchin-vault",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Quantum-encrypted file vault — encrypt with CIFER (ML-KEM-768 + AES-256-GCM), store on Filecoin/IPFS or locally",
   "type": "module",
   "license": "MIT",
