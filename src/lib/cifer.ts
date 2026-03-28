@@ -80,30 +80,63 @@ export async function loginWeb2(email: string, password: string) {
     blackboxUrl: bbUrl,
   });
 
+  if (process.env.URCHIN_DEBUG) {
+    console.error('[debug] registerKey result:', JSON.stringify(keyResult, null, 2));
+  }
+
   // Wait for node registration if not yet complete/partial
-  if (keyResult.nodeRegistrationStatus === 'pending' || keyResult.nodeRegistrationStatus === 'failed') {
-    const maxRetries = 5;
+  if (keyResult.nodeRegistrationStatus !== 'complete' && keyResult.nodeRegistrationStatus !== 'partial') {
+    const maxRetries = 10;
     for (let i = 0; i < maxRetries; i++) {
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 3000));
       const status = await web2.auth.nodeRegistrationStatus(principal.principalId, bbUrl);
+      if (process.env.URCHIN_DEBUG) {
+        console.error(`[debug] node status attempt ${i + 1}/${maxRetries}:`, JSON.stringify(status, null, 2));
+      }
       if (status.nodeRegistrationStatus === 'complete' || status.nodeRegistrationStatus === 'partial') {
         break;
       }
-      if (status.nodeRegistrationStatus === 'failed' || status.nodeRegistrationStatus === 'pending') {
+      // Retry propagation on failed/pending
+      try {
         await web2.auth.retryNodeRegistration({ principalId: principal.principalId, blackboxUrl: bbUrl });
+      } catch (retryErr: any) {
+        if (process.env.URCHIN_DEBUG) {
+          console.error('[debug] retryNodeRegistration error:', retryErr.message);
+        }
       }
       if (i === maxRetries - 1) {
-        throw new Error('Key registration failed: could not propagate to enough nodes. Try again later.');
+        throw new Error('Key registration failed: could not propagate to enough nodes after 10 attempts. Try again later.');
       }
     }
   }
 
   // Create a session (stateless approach)
-  currentSession = await web2.session.createManagedSession({
-    principalId: principal.principalId,
-    ed25519Signer,
-    blackboxUrl: bbUrl,
-  });
+  try {
+    currentSession = await web2.session.createManagedSession({
+      principalId: principal.principalId,
+      ed25519Signer,
+      blackboxUrl: bbUrl,
+    });
+  } catch (sessionErr: any) {
+    // Log the full error for debugging
+    if (process.env.URCHIN_DEBUG) {
+      console.error('[debug] createManagedSession error:', sessionErr);
+    }
+    // Re-check node status to give a better error message
+    try {
+      const finalStatus = await web2.auth.nodeRegistrationStatus(principal.principalId, bbUrl);
+      throw new Error(
+        `Session creation failed: ${sessionErr.message}\n` +
+        `  Node status: ${finalStatus.nodeRegistrationStatus}\n` +
+        `  Success nodes: ${finalStatus.successNodes?.length ?? 0}\n` +
+        `  Failed nodes: ${finalStatus.failedNodes?.length ?? 0}\n` +
+        `  Try again in a few seconds, or run: urchin login`
+      );
+    } catch (statusErr: any) {
+      if (statusErr.message.startsWith('Session creation failed')) throw statusErr;
+      throw new Error(`Session creation failed: ${sessionErr.message}. Try: urchin login`);
+    }
+  }
 
   return {
     principalId: principal.principalId,
