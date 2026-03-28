@@ -110,15 +110,29 @@ export async function loginWeb2(email: string, password: string) {
     }
   }
 
-  // Create a session (stateless approach)
+  // Create a session — use debug fetch to capture actual server response
+  const debugFetch: typeof fetch = async (input, init) => {
+    const response = await fetch(input, init);
+    if (process.env.URCHIN_DEBUG) {
+      const url = typeof input === 'string' ? input : (input as Request).url;
+      console.error(`[debug] fetch ${init?.method || 'GET'} ${url} → ${response.status}`);
+      if (!response.ok) {
+        const cloned = response.clone();
+        const body = await cloned.text();
+        console.error(`[debug] response body: ${body}`);
+      }
+    }
+    return response;
+  };
+
   try {
     currentSession = await web2.session.createManagedSession({
       principalId: principal.principalId,
       ed25519Signer,
       blackboxUrl: bbUrl,
+      fetch: debugFetch,
     });
   } catch (sessionErr: any) {
-    // Log the full error for debugging
     if (process.env.URCHIN_DEBUG) {
       console.error('[debug] createManagedSession error:', sessionErr);
     }
