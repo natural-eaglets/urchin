@@ -23,6 +23,12 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __cliDirname = dirname(fileURLToPath(import.meta.url));
+const PKG = JSON.parse(readFileSync(join(__cliDirname, '..', 'package.json'), 'utf-8'));
 
 const execAsync = promisify(execFile);
 const execShell = promisify(execCb);
@@ -37,7 +43,7 @@ program
     DIM('  Encrypt with CIFER (ML-KEM-768 + AES-256-GCM)\n') +
     DIM('  Store on Filecoin, IPFS, or locally\n')
   )
-  .version('0.2.0')
+  .version(PKG.version)
   .action(async () => {
     await interactiveMode();
   });

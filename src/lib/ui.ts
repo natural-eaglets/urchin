@@ -6,6 +6,14 @@ import boxen from 'boxen';
 import gradient from 'gradient-string';
 import Table from 'cli-table3';
 import figures from 'figures';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PKG_VERSION = JSON.parse(
+  readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf-8')
+).version;
 
 // ─── Brand palette ──────────────────────────────────────
 const CIFER_GREEN = '#00FF88';
@@ -54,7 +62,7 @@ export function banner(compact = false) {
     chalk.gray('  ') +
     ACCENT.bold('Quantum-Encrypted Vault') +
     chalk.gray(' │ ') +
-    DIM('v0.2.0') +
+    DIM(`v${PKG_VERSION}`) +
     chalk.gray(' │ ') +
     DIM('ML-KEM-768 + AES-256-GCM')
   );

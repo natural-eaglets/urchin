@@ -9,6 +9,13 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/urchin-vault"><img src="https://img.shields.io/npm/v/urchin-vault?color=00FF88&label=npm" alt="npm version" /></a>
+  <a href="https://github.com/capsule-corp-ternoa/urchin/blob/main/LICENSE"><img src="https://img.shields.io/github/license/capsule-corp-ternoa/urchin?color=00D4FF" alt="license" /></a>
+  <img src="https://img.shields.io/badge/node-%3E%3D20-green" alt="node" />
+  <img src="https://img.shields.io/badge/encryption-ML--KEM--768-A855F7" alt="encryption" />
+</p>
+
+<p align="center">
   Encrypt files with <a href="https://sdk.cifer-security.com/docs/">CIFER</a> (ML-KEM-768 + AES-256-GCM) and store them on <a href="https://storacha.network">Filecoin/IPFS</a> or locally.
 </p>
 
@@ -33,7 +40,7 @@ Your files are encrypted locally before they ever leave your machine, then store
 
 ```bash
 # Install globally
-npm install -g urchin
+npm install -g urchin-vault
 
 # Or clone and link
 git clone https://github.com/capsule-corp-ternoa/urchin.git
